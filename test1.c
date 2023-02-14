@@ -1,88 +1,133 @@
 #include <stdio.h>
 #include <winsock2.h>
-
-#define BUFFER_SIZE	256
-
-#define PACKET_SIZE 1024
+#include <string.h>
 
 #pragma comment(lib, "ws2_32")
 
-// error Ã³¸®
+#define LISTEN_QUEUE    5
+#define DIRECTORY_SIZE	50
+#define FILENAME_SIZE	30
+#define BUFFER_SIZE	    256
+
 void errorHandling(char* message);
+SOCKET clntConnector(SOCKET servSock, SOCKADDR_IN serv_addr);
+SOCKET socketListener(SOCKADDR_IN serv_addr);
+struct sockaddr_in socketAddress(char* ip, int port);
+void fileReceiver(SOCKET clntSock, char path[], char filename[]);
 
 int main() {
-
     int port = 9999;
-    char ip[] = "192.168.219.100";
+    char* ip = "192.168.219.100";
 
-    SOCKET servSock, clntSock;
-    SOCKADDR_IN serv_addr, clnt_addr = { 0 }; // socket ÁÖ¼Ò ±¸Á¶Ã¼ ÃÊ±âÈ­ (¼­¹ö, Å¬¶óÀÌ¾ğÆ®)
-    WSADATA wsadata;
+    SOCKADDR_IN serv_addr = socketAddress(ip, port);
+    SOCKET servSock = socketListener(serv_addr);
+    SOCKET clntSock = clntConnector(servSock, serv_addr);
 
-    char test[] = "connection success";
-
-    char buf[BUFFER_SIZE];
-    int nbyte = BUFFER_SIZE;
-    size_t filesize, bufsize = 0;
-    FILE* file = NULL;
-
-    // winsock ÃÊ±âÈ­
-    if (WSAStartup(0x0202, &wsadata) != 0) { // wsadata init, ¼º°ø ½Ã 0 ¹İÈ¯
-        errorHandling("WSAStartup error");
-    }
-
-    // servSock SOCKET »ı¼º
-    servSock = socket(PF_INET, SOCK_STREAM, 0);
-    if (servSock == INVALID_SOCKET) { // IPv4, TCP protocol
-        errorHandling("socket error");
-    }
-
-    // servSock SOCKET ÁÖ¼Ò
-    serv_addr.sin_family = AF_INET; // protocol
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); // ip address
-    serv_addr.sin_port = htons(port); // port
-
-    // servSock ÁÖ¼Ò bind
-    if (bind(servSock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == SOCKET_ERROR) {
-        errorHandling("bind error");
-    }
-
-    // Å¬¶óÀÌ¾ğÆ® ¿äÃ» ´ë±â
-    if (listen(servSock, 5) == SOCKET_ERROR) {
-        errorHandling("listen error");
-    }
-
-    // acceptµÉ ½Ã clntSock »ı¼º, Å¬¶óÀÌ¾ğÆ®¿Í Åë½Å
-    int clnt_addr_size = sizeof(clnt_addr);
-    clntSock = accept(servSock, (struct sockaddr*)&clnt_addr, &clnt_addr_size);
-    printf("connect complete");
-
-    // Å¬¶óÀÌ¾ğÆ®·Î ¸Ş½ÃÁö ¼Û½Å
+    // í´ë¼ì´ì–¸íŠ¸ë¡œ ë©”ì‹œì§€ ì†¡ì‹ 
+    char test[] = "accepted";
     send(clntSock, test, sizeof(test), 0);
 
-    // »ı¼ºÇÒ ÆÄÀÏ À§Ä¡, ÀÌ¸§
-    fopen_s(&file, "D:\\projects\\file\\success.jpg", "wb");
+    char filePath[DIRECTORY_SIZE] = "D:\\projects\\file\\";
+    char fileName[FILENAME_SIZE] = "copy.txt";
 
-    while (nbyte != 0) {
-        nbyte = recv(clntSock, buf, BUFFER_SIZE, 0);
-        fwrite(buf, sizeof(char), nbyte, file);
-    }
-
-    fclose(file);
+    // í´ë¼ì´ì–¸íŠ¸ë¡œë¶€í„° íŒŒì¼ ìˆ˜ì‹ , ì €ì¥
+    fileReceiver(clntSock, filePath, fileName);
 
     // socket close
     closesocket(servSock);
     closesocket(clntSock);
 
-    // Windows socket ¹İÈ¯
+    // Windows socket ë°˜í™˜
     WSACleanup();
 
     return 0;
 }
 
+// error ì²˜ë¦¬
 void errorHandling(char* message) {
     fputs(message, stderr);
     fputc('\n', stderr);
     printf("error number : %d\n", WSAGetLastError()); // error code
     exit(1); // stop
+}
+
+// clientì™€ ë°ì´í„° ì†¡ìˆ˜ì‹ ìš© ì†Œì¼“
+SOCKET clntConnector(SOCKET servSock, SOCKADDR_IN serv_addr) {
+
+    SOCKET clntSock;
+    SOCKADDR_IN clnt_addr = { 0 };
+    int clnt_addr_size = sizeof(clnt_addr);
+
+    // acceptë  ì‹œ clntSock ìƒì„±, í´ë¼ì´ì–¸íŠ¸ì™€ í†µì‹ 
+    clntSock = accept(servSock, (struct sockaddr*)&clnt_addr, &clnt_addr_size);
+    printf("Client IP : %s\taccept \n", inet_ntoa(clnt_addr.sin_addr));
+
+    return clntSock;
+
+}
+
+// clientì˜ connect ìš”ì²­ ëŒ€ê¸° ì†Œì¼“
+SOCKET socketListener(SOCKADDR_IN serv_addr) {
+
+    SOCKET servSock;
+
+    // winsock ì´ˆê¸°í™”
+    WSADATA wsadata;
+    if (WSAStartup(0x0202, &wsadata) != 0) { // wsadata init, ì„±ê³µ ì‹œ 0 ë°˜í™˜
+        errorHandling("WSAStartup error");
+    }
+
+    // servSock SOCKET ìƒì„±
+    servSock = socket(PF_INET, SOCK_STREAM, 0);
+    if (servSock == INVALID_SOCKET) { // IPv4, TCP protocol
+        errorHandling("socket error");
+    }
+
+    // servSock ì£¼ì†Œ bind
+    if (bind(servSock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == SOCKET_ERROR) {
+        errorHandling("bind error");
+    }
+
+    // í´ë¼ì´ì–¸íŠ¸ ìš”ì²­ ëŒ€ê¸°
+    if (listen(servSock, LISTEN_QUEUE) == SOCKET_ERROR) {
+        errorHandling("listen error");
+    }
+
+    return servSock;
+
+}
+
+// socket address
+struct sockaddr_in socketAddress(char* ip, int port) {
+    SOCKADDR_IN addr = { 0 };
+
+    // servSock SOCKET ì£¼ì†Œ
+    addr.sin_family = AF_INET; // protocol
+    addr.sin_addr.s_addr = inet_addr(ip); // ip address
+    // addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(port); // port
+
+    return addr;
+}
+
+// fileìˆ˜ì‹ , ì €ì¥
+void fileReceiver(SOCKET clntSock, char path[], char filename[]) {
+    printf("\nSave directory %s\n", path);
+    char* fileDir = strcat(path, filename);
+
+    int nbyte = BUFFER_SIZE;
+    char buf[BUFFER_SIZE];
+    FILE* file = NULL;
+    size_t filesize, bufsize = 0;
+
+    fopen_s(&file, fileDir, "wb");
+
+    // file copy
+    while (nbyte != 0) {
+        nbyte = recv(clntSock, buf, BUFFER_SIZE, 0);
+        fwrite(buf, 1, nbyte, file);
+    }
+    printf("%s save complete \n", filename);
+
+    fclose(file);
 }
