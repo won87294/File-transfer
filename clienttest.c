@@ -1,57 +1,104 @@
 #include <stdio.h>
 #include <winsock2.h>
-#include <errno.h>
-
-#define BUFFER_SIZE	256
+#include <string.h>
 
 #pragma comment(lib, "ws2_32")
 
+#define DIRECTORY_SIZE	50
+#define FILENAME_SIZE	30
+#define BUFFER_SIZE	256
+
 void errorHandling(char* error_message);
+SOCKET servConnector(SOCKADDR_IN sock_addr);
+struct sockaddr_in socketAddress(char* ip, int port);
+void fileSender(SOCKET sock, char path[], char file[]);
 
 int main() {
-
 	int port = 9999;
-	char ip[] = "192.168.219.100";
+	char* ip = "192.168.219.100";
 
-	SOCKET server;
-	SOCKADDR_IN server_addr = { 0 };
-	WSADATA wsadata;
+	SOCKADDR_IN sock_addr = socketAddress(ip, port);
+	SOCKET sock = servConnector(sock_addr);
 
-	char recv_message[30] = "";
+	char targetPath[DIRECTORY_SIZE] = "C:\\filetest\\";
+	char targetFile[FILENAME_SIZE] = "";
+	printf("file name > C:\\filetest\\");
+	scanf("%s", targetFile);
+
+	// ì„œë²„ë¡œ íŒŒì¼ ì†¡ì‹ 
+	fileSender(sock, targetPath, targetFile);
+
+	// socket close
+	closesocket(sock);
+
+	// Windows socket ë°˜í™˜
+	WSACleanup();
+
+	return 0;
+}
+
+// error ì²˜ë¦¬
+void errorHandling(char* error_message) {
+	fputs(error_message, stderr);
+	fputc('\n', stderr);
+	printf("%d \n", WSAGetLastError());
+	exit(1);
+}
+
+// serverì— connect ìš”ì²­
+SOCKET servConnector(SOCKADDR_IN sock_addr) {
+	SOCKET sock;
+
+	char recv_message[10] = "";
 	int recv_Len;
 
-	char* target = "C:\\filetest\\testjpg.jpg";
-	char buf[BUFFER_SIZE];
-	FILE* file = NULL; // file stream
-	size_t fsize, nsize = 0;
-
-	if (WSAStartup(0x0202, &wsadata) != 0) { // wsadata init, ¼º°ø ½Ã 0 ¹İÈ¯
+	WSADATA wsadata;
+	if (WSAStartup(0x0202, &wsadata) != 0) { // wsadata init, ì„±ê³µ ì‹œ 0 ë°˜í™˜
 		errorHandling("WSAStartup error");
 	}
 
-	server = socket(PF_INET, SOCK_STREAM, 0);
-	if (server == INVALID_SOCKET) {
+	sock = socket(PF_INET, SOCK_STREAM, 0);
+	if (sock == INVALID_SOCKET) {
 		errorHandling("socket error");
 	}
 
-	// Á¢¼ÓÇÒ ¼­¹öÀÇ ipÁÖ¼Ò, port¹øÈ£
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.s_addr = inet_addr(ip);
-	server_addr.sin_port = htons(port);
-
-	// ¼­¹ö ¿¬°á ¿äÃ»
-	if (connect(server, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+	// ì„œë²„ ì—°ê²° ìš”ì²­
+	if (connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
 		errorHandling("connect error");
 	}
 
-	// ¼­¹ö·ÎºÎÅÍ ¸Ş½ÃÁö ¼ö½Å
-	recv_Len = recv(server, recv_message, sizeof(recv_message) - 1, 0);
-	if (recv_Len == SOCKET_ERROR || recv_Len <= 0) {
+	// ì„œë²„ë¡œë¶€í„° ì ‘ì† ìŠ¹ì¸ ë©”ì‹œì§€ ìˆ˜ì‹ 
+	recv_Len = recv(sock, recv_message, sizeof(recv_message) - 1, 0);
+	if (recv_Len <= 0) {
 		errorHandling("receive error");
 	}
-	printf("Message from server : %s \n", recv_message);
+	printf("connection %s \n", recv_message);
 
-	fopen_s(&file, target, "rb");
+	return sock;
+}
+
+// socket address
+struct sockaddr_in socketAddress(char* ip, int port) {
+	SOCKADDR_IN addr = { 0 };
+
+	// ì ‘ì†í•  ì„œë²„ì˜ ipì£¼ì†Œ, portë²ˆí˜¸
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = inet_addr(ip);
+	addr.sin_port = htons(port);
+
+	return addr;
+}
+
+// file ì†¡ì‹ 
+void fileSender(SOCKET sock, char path[], char filename[]) {
+	printf("\nfile directory %s\n", path);
+	char* targetDir = strcat(path, filename);
+
+	char buf[BUFFER_SIZE];
+	FILE* file = NULL;
+	size_t fsize, nsize = 0;
+
+	fopen_s(&file, targetDir, "rb");
 	if (file == NULL) {
 		printf("file transfer fail");
 		return 1;
@@ -60,31 +107,18 @@ int main() {
 	// file size
 	fseek(file, 0, SEEK_END);
 	fsize = ftell(file);
+	printf("file size : %d byte\n", (int*)fsize);
+	printf("buf size : %d byte\n", BUFFER_SIZE);
 
 	fseek(file, 0, SEEK_SET);
 
 	while (nsize != fsize) {
-		// read from file to buf
 		// 1byte * 256 count = 256byte => buf[256];
 		int fpsize = fread(buf, 1, BUFFER_SIZE, file);
 		nsize += fpsize;
-		send(server, buf, fpsize, 0);
+		send(sock, buf, fpsize, 0);
 	}
+	printf("%s send complete \n", filename);
 
 	fclose(file);
-
-	// socket close
-	closesocket(server);
-
-	// Windows socket ¹İÈ¯
-	WSACleanup();
-
-	return 0;
-}
-
-void errorHandling(char* error_message) {
-	fputs(error_message, stderr);
-	fputc('\n', stderr);
-	printf("%d \n", WSAGetLastError());
-	exit(1);
 }
