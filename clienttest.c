@@ -16,14 +16,20 @@ void fileSender(SOCKET sock, char path[], char file[]);
 int main() {
 	int port = 9999;
 	char* ip = "192.168.219.100";
+	char fileinput[FILENAME_SIZE];
+
+	// 디렉토리 내에 송신할 파일명 입력
+	printf("file name > C:\\filetest\\");
+	gets(fileinput);
 
 	SOCKADDR_IN sock_addr = socketAddress(ip, port);
 	SOCKET sock = servConnector(sock_addr);
 
-	char targetPath[DIRECTORY_SIZE] = "C:\\filetest\\";
-	char targetFile[FILENAME_SIZE] = "";
-	printf("file name > C:\\filetest\\");
-	scanf("%s", targetFile);
+	// 서버로 송신할 파일명 전달
+	send(sock, fileinput, sizeof(fileinput), 0);
+
+	char targetPath[DIRECTORY_SIZE] = "C:\\filetest\\"; // 경로
+	char* targetFile = fileinput; // 파일명
 
 	// 서버로 파일 송신
 	fileSender(sock, targetPath, targetFile);
@@ -49,9 +55,6 @@ void errorHandling(char* error_message) {
 SOCKET servConnector(SOCKADDR_IN sock_addr) {
 	SOCKET sock;
 
-	char recv_message[10] = "";
-	int recv_Len;
-
 	WSADATA wsadata;
 	if (WSAStartup(0x0202, &wsadata) != 0) { // wsadata init, 성공 시 0 반환
 		errorHandling("WSAStartup error");
@@ -66,13 +69,6 @@ SOCKET servConnector(SOCKADDR_IN sock_addr) {
 	if (connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
 		errorHandling("connect error");
 	}
-
-	// 서버로부터 접속 승인 메시지 수신
-	recv_Len = recv(sock, recv_message, sizeof(recv_message) - 1, 0);
-	if (recv_Len <= 0) {
-		errorHandling("receive error");
-	}
-	printf("connection %s \n", recv_message);
 
 	return sock;
 }
@@ -107,8 +103,8 @@ void fileSender(SOCKET sock, char path[], char filename[]) {
 	// file size
 	fseek(file, 0, SEEK_END);
 	fsize = ftell(file);
-	printf("file size : %d byte\n", (int*)fsize);
-	printf("buf size : %d byte\n", BUFFER_SIZE);
+	// printf("file size : %d byte\n", (int*)fsize);
+	// printf("buf size : %d byte\n", BUFFER_SIZE);
 
 	fseek(file, 0, SEEK_SET);
 
