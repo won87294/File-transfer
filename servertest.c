@@ -18,17 +18,21 @@ void fileReceiver(SOCKET clntSock, char path[], char filename[]);
 int main() {
     int port = 9999;
     char* ip = "192.168.219.100";
+    char fileName_recv[FILENAME_SIZE] = "";
+    int fileName_Len;
 
     SOCKADDR_IN serv_addr = socketAddress(ip, port);
     SOCKET servSock = socketListener(serv_addr);
     SOCKET clntSock = clntConnector(servSock, serv_addr);
 
-    // 클라이언트로 메시지 송신
-    char test[] = "accepted";
-    send(clntSock, test, sizeof(test), 0);
+    // 클라이언트로부터 저장할 파일명 수신
+    fileName_Len = recv(clntSock, fileName_recv, sizeof(fileName_recv), 0); // sizeof(fileName_recv)-1 >> 오류나서 -1뺌.
+    if (fileName_Len <= 0) {
+        errorHandling("receive error");
+    }
 
-    char filePath[DIRECTORY_SIZE] = "D:\\projects\\file\\";
-    char fileName[FILENAME_SIZE] = "copy.txt";
+    char filePath[DIRECTORY_SIZE] = "D:\\projects\\file\\"; // 저장할 경로
+    char* fileName = fileName_recv; // 파일명
 
     // 클라이언트로부터 파일 수신, 저장
     fileReceiver(clntSock, filePath, fileName);
@@ -57,6 +61,7 @@ SOCKET clntConnector(SOCKET servSock, SOCKADDR_IN serv_addr) {
     SOCKET clntSock;
     SOCKADDR_IN clnt_addr = { 0 };
     int clnt_addr_size = sizeof(clnt_addr);
+
 
     // accept될 시 clntSock 생성, 클라이언트와 통신
     clntSock = accept(servSock, (struct sockaddr*)&clnt_addr, &clnt_addr_size);
